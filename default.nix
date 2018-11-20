@@ -12,7 +12,6 @@ let
   commandRuntimeDeps = pkgs: with pkgs; [
     coreutils
     git
-    gitAndTools.hub
     nix-prefetch-git
     openssh
   ];
@@ -43,6 +42,12 @@ let
         beam-postgres = pkgs.haskell.lib.dontCheck (self.callCabal2nix "beam-postgres" (beam-src + /beam-postgres) {});
         beam-sqlite = self.callCabal2nix "beam-sqlite" (beam-src + /beam-sqlite) {};
 
+        hnix = pkgs.haskell.lib.dontCheck (self.callCabal2nix "hnix" (pkgs.fetchFromGitHub {
+          owner = "haskell-nix";
+          repo = "hnix";
+          rev = "42afdc21da5d9e076eab57eaa42bfdde938192b8";
+          sha256 = "0psw384dx9bw2dp93xrzw8rd9amvcwgzn64jzzwby7sfspj6k349";
+        }) {});
         # Need 8.0.2 build support
         # PR: https://github.com/dmwit/universe/pull/33
         universe-template = self.callCabal2nix "universe-template" (pkgs.fetchFromGitHub {
