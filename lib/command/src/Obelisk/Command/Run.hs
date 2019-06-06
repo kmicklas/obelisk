@@ -78,7 +78,9 @@ run = do
           proc "nix" ["eval", "-f", root, "passthru.staticFilesImpure", "--raw"]
     putLog Debug $ "Assets impurely loaded from: " <> assets
     runGhcid dotGhciPath $ Just $ unwords
-      [ "Obelisk.Run.run"
+      [ "(openFile \"run-output\" AppendMode >>= flip hDuplicateTo stdout)"
+      , ">>"
+      , "Obelisk.Run.run"
       , show freePort
       , "(runServeAsset " ++ show assets ++ ")"
       , "Backend.backend"
@@ -180,6 +182,8 @@ withGhciScript pkgs f = do
         , extensionsLine
         , ":set " <> intercalate " " (("-X" <>) . prettyShow <$> language)
         , ":load Backend Frontend"
+        , "import GHC.IO.Handle"
+        , "import System.IO"
         , "import Obelisk.Run"
         , "import qualified Frontend"
         , "import qualified Backend"
@@ -216,7 +220,7 @@ runGhcid dotGhci mcmd = callCommand $ unwords $ "ghcid" : opts
     opts =
       [ "-W"
       --TODO: The decision of whether to use -fwarn-redundant-constraints should probably be made by the user
-      , "--command='ghci -Wall -ignore-dot-ghci -fwarn-redundant-constraints -no-user-package-db -ghci-script " <> dotGhci <> "' "
+      , "--command='ghci -fexternal-interpreter -Wall -ignore-dot-ghci -fwarn-redundant-constraints -no-user-package-db -ghci-script " <> dotGhci <> "' "
       , "--reload=config"
       , "--outputfile=ghcid-output.txt"
       ] <> testCmd
