@@ -21,9 +21,9 @@ library
     , either
     , errors
     , filepath
+    , git
     , github
     , here
-    , hit
     , hnix
     , hpack
     , io-streams
