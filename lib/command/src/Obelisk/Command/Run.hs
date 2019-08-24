@@ -123,7 +123,7 @@ parseCabalPackage dir = do
           Left err -> do
             putLog Error $ T.pack $ "Failed to parse " <> hpackFp <> ": " <> err
             return Nothing
-          Right (DecodeResult hpackPackage _ _) -> do
+          Right (DecodeResult hpackPackage _ _ _) -> do
             return $ Just $ renderPackage [] hpackPackage
       else return Nothing
 
