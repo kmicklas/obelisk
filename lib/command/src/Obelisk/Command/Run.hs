@@ -19,9 +19,11 @@ import Control.Monad.Except (runExceptT, throwError)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Reader (MonadIO)
 import Data.Coerce (coerce)
+import Data.Containers.ListUtils (nubOrd)
 import Data.Default (def)
 import Data.Either (partitionEithers)
 import Data.Foldable (fold, for_, toList)
+import Data.Functor ((<&>))
 import Data.Functor.Identity (runIdentity)
 import Data.List.NonEmpty (NonEmpty)
 import qualified Data.List.NonEmpty as NE
@@ -44,8 +46,10 @@ import Distribution.Parsec.ParseResult (runParseResult)
 import qualified Distribution.System as Dist
 import Distribution.Types.BuildInfo
 import Distribution.Types.CondTree
+import Distribution.Types.Dependency
 import Distribution.Types.GenericPackageDescription
 import Distribution.Types.Library
+import Distribution.Types.PackageName
 import Distribution.Utils.Generic
 import qualified Distribution.Parsec.Common as Dist
 import qualified Hpack.Config as Hpack
@@ -91,6 +95,7 @@ data CabalPackageInfo = CabalPackageInfo
     -- ^ List of globally set languages of the library component
   , _cabalPackageInfo_compilerOptions :: [(CompilerFlavor, [String])]
     -- ^ List of compiler-specific options (e.g., the "ghc-options" field of the cabal file)
+  , _cabalPackageInfo_buildDepends :: [String]
   }
 
 -- | 'Bool' with a better name for it's purpose.
@@ -348,6 +353,8 @@ parseCabalPackage' pkg = runExceptT $ do
         , _cabalPackageInfo_defaultLanguage =
             defaultLanguage $ libBuildInfo lib
         , _cabalPackageInfo_compilerOptions = options $ libBuildInfo lib
+        , _cabalPackageInfo_buildDepends = unPackageName . depPkgName <$>
+            targetBuildDepends (libBuildInfo lib)
         }
     Right Nothing -> throwError "Haskell package has no library component"
     Left (_, errors) ->
@@ -437,10 +444,15 @@ getGhciSessionSettings (toList -> packageInfos) pathBase = do
     canonicalPkgFile <- canonicalizePath $ _cabalPackageInfo_packageFile pkg
     pure (makeRelative canonicalPathBase canonicalPkgFile, makeRelative canonicalPathBase <$> canonicalSrcDirs)
 
-  pure
-    $  ["-F", "-pgmF", selfExe, "-optF", preprocessorIdentifier]
-    <> concatMap (\p -> ["-optF", p]) pkgFiles
-    <> [ "-i" <> intercalate ":" (concatMap toList pkgSrcPaths) ]
+  let buildDepends = nubOrd $ mconcat $ _cabalPackageInfo_buildDepends <$> packageInfos
+
+  pure $ mconcat
+    [ ["-F", "-pgmF", selfExe, "-optF", preprocessorIdentifier]
+    , concatMap (\p -> ["-optF", p]) pkgFiles
+    , [ "-i" <> intercalate ":" (concatMap toList pkgSrcPaths) ]
+    , ["-package", "obelisk-run"]
+    , mconcat $ buildDepends <&> \pkg -> ["-package", pkg]
+    ]
 
 -- | Run ghci repl
 runGhciRepl
