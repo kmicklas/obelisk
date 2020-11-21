@@ -104,6 +104,8 @@ module Obelisk.Route
   , queryOnlyEncoder
   , Decoder(..)
   , dmapEncoder
+  , fieldsEncoder
+  , optionalFieldsEncoder
   , fieldMapEncoder
   , pathFieldEncoder
   , jsonEncoder
@@ -1121,6 +1123,44 @@ dmapEncoder keyEncoder' valueEncoderFor = unsafeEncoder $ do
               Just (Decoder e) -> do
                 v' <- tryDecode e v
                 return (k' :=> Identity v')
+    }
+
+fieldsEncoder
+  :: forall check parse r. (Applicative check, Applicative parse, HasFields r)
+  => Encoder check parse r (Fields r)
+fieldsEncoder = unsafeEncoder $ pure $ EncoderImpl
+  { _encoderImpl_encode = toFields
+  , _encoderImpl_decode = pure . fromFields
+  }
+
+newtype OptionalEncoder check parse a = OptionalEncoder (Encoder check parse a (Maybe a))
+
+optionalFieldsEncoder
+  :: forall check parse r
+  .  ( Monad check
+     , Applicative parse
+     , GCompare (Field r)
+     , UniverseSome (Field r)
+     )
+  => (forall v. Field r v -> Encoder check parse v (Maybe v))
+  -> Encoder check parse (Fields r) (DMap (Field r) Identity)
+optionalFieldsEncoder optionalKeyEncoder = unsafeEncoder $ do
+  valueEncoders :: DMap (Field r) (OptionalEncoder Identity parse) <-
+    fmap DMap.fromList $ forM universe $ \(Some f) ->
+      (f :=>) . OptionalEncoder <$> checkEncoder (optionalKeyEncoder f)
+  pure $ EncoderImpl
+    { _encoderImpl_encode = \(Fields ff) -> DMap.fromList $ catMaybes $
+        flip fmap (DMap.toList valueEncoders) $ \(f :=> (OptionalEncoder e)) ->
+          (f :=>) . Identity <$> encode e (ff f)
+    , _encoderImpl_decode = \dm -> do
+        let decodeField :: forall v. Field r v -> OptionalEncoder Identity parse v -> parse (Identity v)
+            decodeField f (OptionalEncoder e) = case DMap.lookup f dm of
+              Just (Identity v) -> pure $ Identity v
+              Nothing -> Identity <$> tryDecode e Nothing
+        decodedMap <- DMap.traverseWithKey decodeField valueEncoders
+        pure $ Fields $ \f -> case DMap.lookup f decodedMap of
+          Just (Identity v) -> v
+          Nothing -> error "optionalFieldsEncoder: some Field was missing from Universe instance from its type."
     }
 
 fieldMapEncoder :: forall check parse r.
