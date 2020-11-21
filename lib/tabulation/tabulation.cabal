@@ -21,6 +21,10 @@ library
   exposed-modules: Data.Tabulation
   -- other-modules:
   -- other-extensions:
-  build-depends:       base, lens
+  build-depends:       base
+                     , dependent-map
+                     , dependent-sum
+                     , lens
+                     , mtl
   hs-source-dirs:      src
   default-language:    Haskell2010

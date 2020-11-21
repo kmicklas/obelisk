@@ -1,9 +1,14 @@
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE RankNTypes #-}
 
 module Data.Tabulation where
 
 import Control.Lens
+import Control.Monad.Writer.Strict
+import Data.Dependent.Map (DMap)
+import qualified Data.Dependent.Map as DMap
+import Data.Dependent.Sum (DSum (..))
 
 -- | This is a class for record types whose fields can be enumerated by an associated GADT. It's closely related to the concept of a representable functor, except without the functor part, and the fields are not all the same type.
 class HasFields a where
@@ -21,7 +26,7 @@ class HasFields a where
   {-# MINIMAL fieldLens, tabulateFieldsA #-}
 
 -- | Represents a record as a function from each of its fields.
--- This is like @DMap ('Field' a) Identity@, but guaranteed to be total.
+-- This is like @'DMap' ('Field' a) 'Identity'@, but guaranteed to be total.
 newtype Fields a = Fields { lookupField :: forall x. Field a x -> x }
 
 fromFields :: HasFields a => Fields a -> a
@@ -29,3 +34,10 @@ fromFields (Fields ff) = tabulateFields ff
 
 toFields :: HasFields a => a -> Fields a
 toFields r = Fields $ \f -> indexField r f
+
+toFieldDMap
+  :: (HasFields a, DMap.GCompare (Field a))
+  => a
+  -> DMap (Field a) Identity
+toFieldDMap = DMap.fromList . execWriter . traverseWithField tellField
+  where tellField f v = tell [f :=> Identity v] >> return v
